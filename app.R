@@ -2,76 +2,128 @@ library(shiny)
 library(tidyverse)
 library(ggplot2)
 library(scales)
+library(DT)
 
-df = bind_rows(read_csv("convert_to_tadj1.csv") %>%
-              mutate(which = "convert_to_tadj"),
-          read_csv("develop.csv") %>%
-              mutate(which = "develop"),
-          read_csv("fdf5db8.csv") %>%
-              mutate(which = "release")) %>%
-    rename(time = real_time) %>%
-    select(name, time, which) %>%
-    filter(!str_detect(name, "_mean$") &
-               !str_detect(name, "_median$") &
-               !str_detect(name, "_stddev$") &
-               !str_detect(name, "toss_me")) %>%
-    separate(name, c("name", "n", "tmp"), "/") %>%
-    mutate(n = as.integer(n)) %>%
-    select(-tmp)
+df = readRDS("df.rds")
 
-df = df %>%
-    group_by(name, n, which) %>%
-    mutate(r = row_number()) %>%
-    spread(which, time) %>%
-    mutate(develop = release / develop) %>%
-    mutate(tadj = release / convert_to_tadj) %>%
-    select(name, n, develop, tadj) %>%
-    gather(which, speedup, develop, tadj) %>%
-    group_by(name, n, which) %>%
-    summarize(ql = quantile(speedup, 0.25),
-              m = median(speedup),
-              qh = quantile(speedup, 0.75))
-
-benchmark_names = df %>% pull(name) %>% unique
+benchmarks = df %>% pull(benchmark) %>% unique
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-
-    # Application title
-    titlePanel("Stan Math Benchmarks"),
-
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            selectInput("select", "Select function", 
-                        choices = benchmark_names)
-        ),
-
-        # Show a plot of the generated distribution
-        mainPanel(
-            h2("Speedup vs. 3.3.0 release"),
-            h4("Dashed line is 3.3.0 release"),
-            h4("Higher is better"),
-            h4("Ribbons are 50% intervals on 30 samples"),
-           plotOutput("distPlot")
-        )
-    )
+    title = "Performance explorer",
+    hr(),
+    fluidRow(
+        column(6, selectInput('base_benchmark', 'Baseline', benchmarks, selected = "develop_27c475bdf8_matvar")),
+        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "convert_to_tadj2_7996f5aafd_varmat"))
+    ),
+    hr(),
+    dataTableOutput('table'),
+    hr(),
+    selectInput('func', 'Function', c()),
+    plotOutput('plot'),
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
-    output$distPlot <- renderPlot({
-        df %>%
-            filter(name == input$select) %>%
-            ggplot(aes(n, m)) +
-            geom_ribbon(aes(n, ymin = ql, ymax = qh, fill = which), alpha = 0.5) +
-            geom_hline(yintercept = 1.0, linetype = "dashed", color = "black", size = 1) +
-            geom_point(aes(color = which), size = 1) +
-            geom_line(aes(color = which), size = 1) +
-            theme(axis.text.x = element_text(angle = 45, hjust = 1),
-                  text = element_text(size=20)) +
-            scale_x_continuous(trans = log2_trans(), labels = 2^(1:10), breaks = 2^(1:10)) +
-            scale_y_log10()
+server <- function(input, output, session) {
+    observe({
+        names_intersection = intersect(unique(df %>% filter(benchmark == input$base_benchmark) %>% pull(name)),
+                                       unique(df %>% filter(benchmark == input$comp_benchmark) %>% pull(name)))
+        
+        if(input$func %in% names_intersection) {
+            to_select = input$func
+        } else {
+            to_select = head(names_intersection, 1)
+        }
+        
+        updateSelectInput(session, 'func',
+                          label = 'Function',
+                          choices = names_intersection,
+                          selected = to_select)
+    })
+    
+    output$table <-
+        renderDataTable({
+            base_df = df %>%
+                filter(benchmark == input$base_benchmark) %>%
+                select(-benchmark) %>%
+                mutate(which = "base")
+            
+            comp_df = df %>%
+                filter(benchmark == input$comp_benchmark) %>%
+                select(-benchmark) %>%
+                mutate(which = "comp")
+            
+            names_intersection = intersect(unique(base_df %>% pull(name)),
+                                           unique(comp_df %>% pull(name)))
+            
+            base_df = base_df %>% filter(name %in% names_intersection)
+            comp_df = comp_df %>% filter(name %in% names_intersection)
+            
+            total_df = bind_rows(base_df, comp_df)
+            
+            if(nrow(total_df) > 0) {
+                to_render_df = total_df %>%
+                    group_by(name, n, which) %>%
+                    mutate(r = row_number()) %>%
+                    spread(which, time) %>%
+                    mutate(speedup = base / comp) %>%
+                    group_by(name) %>%
+                    summarize(min_speedup = min(speedup),
+                              max_speedup = max(speedup),
+                              percent_tests_faster = sum(speedup > 1.0) / n()) %>%
+                    datatable() %>%
+                    formatRound(columns = c('min_speedup', 'max_speedup'), digits = 3) %>%
+                    formatPercentage('percent_tests_faster', 2)
+
+                return(to_render_df)
+            }
+        })
+    
+    output$plot <- renderPlot({
+        base_df = df %>%
+            filter(benchmark == input$base_benchmark,
+                   name == input$func) %>%
+            select(-benchmark) %>%
+            mutate(which = "base")
+        
+        comp_df = df %>%
+            filter(benchmark == input$comp_benchmark,
+                   name == input$func) %>%
+            select(-benchmark) %>%
+            mutate(which = "comp")
+        
+        names_intersection = intersect(unique(base_df %>% pull(name)),
+                                       unique(comp_df %>% pull(name)))
+        
+        base_df = base_df %>% filter(name %in% names_intersection)
+        comp_df = comp_df %>% filter(name %in% names_intersection)
+        
+        total_df = bind_rows(base_df, comp_df)
+        
+        if(nrow(total_df) > 0) {
+            to_render_plot = total_df %>%
+                group_by(name, n, which) %>%
+                mutate(r = row_number()) %>%
+                spread(which, time) %>%
+                drop_na() %>%
+                mutate(speedup = base / comp) %>%
+                group_by(name, n) %>%
+                summarize(ql = quantile(speedup, 0.25),
+                          m = median(speedup),
+                          qh = quantile(speedup, 0.75)) %>%
+                ggplot(aes(n, m)) +
+                    geom_ribbon(aes(n, ymin = ql, ymax = qh), alpha = 0.5) +
+                    geom_hline(yintercept = 1.0, linetype = "dashed", color = "red", size = 1) +
+                    geom_point(size = 1) +
+                    geom_line(size = 1) +
+                    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                          text = element_text(size=20)) +
+                    scale_x_continuous(trans = log2_trans(), labels = 2^(1:10), breaks = 2^(1:10)) +
+                    scale_y_log10() +
+                ylab("speedup")
+            
+            return(to_render_plot)
+        }
     })
 }
 
