@@ -20,7 +20,8 @@ ui <- fluidPage(
     dataTableOutput('table'),
     hr(),
     selectInput('func', 'Function', c()),
-    plotOutput('plot'),
+    plotOutput('plot_ratio'),
+    plotOutput('plot')
 )
 
 # Define server logic required to draw a histogram
@@ -79,7 +80,7 @@ server <- function(input, output, session) {
             }
         })
     
-    output$plot <- renderPlot({
+    output$plot_ratio <- renderPlot({
         base_df = df %>%
             filter(benchmark == input$base_benchmark,
                    name == input$func) %>%
@@ -121,6 +122,48 @@ server <- function(input, output, session) {
                     scale_x_continuous(trans = log2_trans(), labels = 2^(1:10), breaks = 2^(1:10)) +
                     scale_y_log10() +
                 ylab("speedup")
+            
+            return(to_render_plot)
+        }
+    })
+    
+    output$plot <- renderPlot({
+        base_df = df %>%
+            filter(benchmark == input$base_benchmark,
+                   name == input$func) %>%
+            select(-benchmark) %>%
+            mutate(which = "base")
+        
+        comp_df = df %>%
+            filter(benchmark == input$comp_benchmark,
+                   name == input$func) %>%
+            select(-benchmark) %>%
+            mutate(which = "comp")
+        
+        names_intersection = intersect(unique(base_df %>% pull(name)),
+                                       unique(comp_df %>% pull(name)))
+        
+        base_df = base_df %>% filter(name %in% names_intersection)
+        comp_df = comp_df %>% filter(name %in% names_intersection)
+        
+        total_df = bind_rows(base_df, comp_df)
+        
+        if(nrow(total_df) > 0) {
+            to_render_plot = total_df %>%
+                drop_na() %>%
+                group_by(name, n, which) %>%
+                summarize(ql = quantile(time, 0.25),
+                          m = median(time),
+                          qh = quantile(time, 0.75)) %>%
+                ggplot(aes(n, m)) +
+                geom_ribbon(aes(n, ymin = ql, ymax = qh, fill = which), alpha = 0.5) +
+                geom_point(aes(color = which), size = 1) +
+                geom_line(aes(color = which), size = 1) +
+                theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                      text = element_text(size=20)) +
+                scale_x_continuous(trans = log2_trans(), labels = 2^(1:10), breaks = 2^(1:10)) +
+                scale_y_log10() +
+                ylab("time (ns)")
             
             return(to_render_plot)
         }

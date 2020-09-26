@@ -8,18 +8,23 @@ df = lapply(list.files("benchmarks"), function(folder) {
   varmat = matches[4]
   
   lapply(list.files(file.path("benchmarks", folder)), function(csv) {
-    read.csv(file.path("benchmarks", folder, csv)) %>%
-      as_tibble() %>%
-      rename(time = real_time) %>%
-      select(name, time) %>%
-      filter(!str_detect(name, "_mean$") &
-               !str_detect(name, "_median$") &
-               !str_detect(name, "_stddev$") &
-               !str_detect(name, "toss_me")) %>%
-      separate(name, c("name", "n", "tmp"), "/") %>%
-      mutate(n = as.integer(n)) %>%
-      select(-tmp) %>%
-      mutate(benchmark = folder)
+    tryCatch({
+      read.csv(file.path("benchmarks", folder, csv)) %>%
+        as_tibble() %>%
+        rename(time = real_time) %>%
+        select(name, time) %>%
+        filter(!str_detect(name, "_mean$") &
+                 !str_detect(name, "_median$") &
+                 !str_detect(name, "_stddev$") &
+                 !str_detect(name, "toss_me")) %>%
+        separate(name, c("name", "n", "tmp"), "/") %>%
+        mutate(n = as.integer(n)) %>%
+        select(-tmp) %>%
+        mutate(benchmark = folder)
+    }, error = function(e) {
+      print(paste(folder, csv, e))
+      return(NULL)
+    })
   }) %>%
     bind_rows()
 }) %>%
