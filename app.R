@@ -71,10 +71,10 @@ server <- function(input, output, session) {
                     group_by(name) %>%
                     summarize(min_speedup = min(speedup),
                               max_speedup = max(speedup),
-                              percent_tests_faster = sum(speedup > 1.0) / n()) %>%
+                              N_of_min_speedup = n[which.min(speedup)],
+                              N_of_max_speedup = n[which.max(speedup)]) %>%
                     datatable() %>%
-                    formatRound(columns = c('min_speedup', 'max_speedup'), digits = 3) %>%
-                    formatPercentage('percent_tests_faster', 2)
+                    formatRound(columns = c('min_speedup', 'max_speedup'), digits = 3)
 
                 return(to_render_df)
             }
