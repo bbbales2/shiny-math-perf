@@ -67,6 +67,7 @@ server <- function(input, output, session) {
                     group_by(name, n, which) %>%
                     mutate(r = row_number()) %>%
                     spread(which, time) %>%
+                    drop_na() %>%
                     mutate(speedup = base / comp) %>%
                     select(name, n, speedup) %>%
                     group_by(name, n) %>%
