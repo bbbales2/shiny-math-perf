@@ -31,3 +31,4 @@ df = lapply(list.files("benchmarks"), function(folder) {
   bind_rows()
 
 saveRDS(df, file = "df.rds")
+

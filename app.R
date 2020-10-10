@@ -14,7 +14,7 @@ ui <- fluidPage(
     hr(),
     fluidRow(
         column(6, selectInput('base_benchmark', 'Baseline', benchmarks, selected = "3492945_349294501c_matvar")),
-        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "develop_50d56cc7ce_matvar"))
+        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "develop_cb33917445_matvar"))
     ),
     hr(),
     dataTableOutput('table'),
@@ -68,13 +68,16 @@ server <- function(input, output, session) {
                     mutate(r = row_number()) %>%
                     spread(which, time) %>%
                     mutate(speedup = base / comp) %>%
+                    select(name, n, speedup) %>%
+                    group_by(name, n) %>%
+                    summarize(median_speedup = median(speedup)) %>%
                     group_by(name) %>%
-                    summarize(min_speedup = min(speedup),
-                              max_speedup = max(speedup),
-                              N_of_min_speedup = n[which.min(speedup)],
-                              N_of_max_speedup = n[which.max(speedup)]) %>%
+                    summarize(min_median_speedup = min(median_speedup),
+                              max_median_speedup = max(median_speedup),
+                              N_of_min_median_speedup = n[which.min(median_speedup)],
+                              N_of_max_median_speedup = n[which.max(median_speedup)]) %>%
                     datatable() %>%
-                    formatRound(columns = c('min_speedup', 'max_speedup'), digits = 3)
+                    formatRound(columns = c('min_median_speedup', 'max_median_speedup'), digits = 3)
 
                 return(to_render_df)
             }
