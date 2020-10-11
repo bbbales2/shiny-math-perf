@@ -14,7 +14,7 @@ ui <- fluidPage(
     hr(),
     fluidRow(
         column(6, selectInput('base_benchmark', 'Baseline', benchmarks, selected = "3492945_349294501c_matvar")),
-        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "develop_cb33917445_matvar"))
+        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "a_few_varmats_be2f717020_matvar"))
     ),
     hr(),
     dataTableOutput('table'),
