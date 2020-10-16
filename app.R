@@ -13,8 +13,8 @@ ui <- fluidPage(
     title = "Performance explorer",
     hr(),
     fluidRow(
-        column(6, selectInput('base_benchmark', 'Baseline', benchmarks, selected = "3492945_349294501c_matvar")),
-        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "a_few_varmats_be2f717020_matvar"))
+        column(6, selectInput('base_benchmark', 'Baseline', benchmarks, selected = "develop_dec8ff7ba1_matvar")),
+        column(6, selectInput('comp_benchmark', 'Comparison', benchmarks, selected = "a_few_varmats_0566e91116_matvar"))
     ),
     hr(),
     dataTableOutput('table'),
